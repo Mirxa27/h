@@ -3,11 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-export default function AdvancedDashboard() {
-  const { data: metrics, isLoading } = useQuery(["host-dashboard-metrics"], async () => {
-    const response = await apiRequest("GET", "/api/host-dashboard-metrics");
+export default function FinancialDashboard() {
+  const { data: financials, isLoading } = useQuery(["financial-dashboard"], async () => {
+    const response = await apiRequest("GET", "/api/financial-dashboard");
     if (!response.ok) {
-      throw new Error("Failed to fetch dashboard metrics");
+      throw new Error("Failed to fetch financial data");
     }
     return response.json();
   });
@@ -18,45 +18,45 @@ export default function AdvancedDashboard() {
 
   return (
     <div className="p-4">
-      <h1 className="text-2xl font-bold mb-4">Host Dashboard</h1>
+      <h1 className="text-2xl font-bold mb-4">Financial Dashboard</h1>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <Card>
           <CardHeader>
-            <CardTitle>Occupancy Rate</CardTitle>
+            <CardTitle>Total Revenue</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">{metrics.occupancyRate}%</p>
+            <p className="text-2xl font-bold">${financials.totalRevenue}</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Revenue</CardTitle>
+            <CardTitle>Total Expenses</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">${metrics.revenue}</p>
+            <p className="text-2xl font-bold">${financials.totalExpenses}</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Booking Pace</CardTitle>
+            <CardTitle>Net Profit</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">{metrics.bookingPace} bookings/week</p>
+            <p className="text-2xl font-bold">${financials.netProfit}</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Guest Demographics</CardTitle>
+            <CardTitle>Expense Breakdown</CardTitle>
           </CardHeader>
           <CardContent>
             <ul>
-              {metrics.guestDemographics.map((demo) => (
-                <li key={demo.ageGroup}>
-                  {demo.ageGroup}: {demo.percentage}%
+              {financials.expenseBreakdown.map((expense) => (
+                <li key={expense.category}>
+                  {expense.category}: ${expense.amount}
                 </li>
               ))}
             </ul>
