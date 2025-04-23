@@ -1,0 +1,574 @@
+import type { Express, Request, Response } from "express";
+import { createServer, type Server } from "http";
+import { storage } from "./storage";
+import { 
+  insertUserSchema, 
+  insertPropertySchema, 
+  insertBookingSchema, 
+  insertReviewSchema, 
+  insertMessageSchema, 
+  insertWishlistSchema 
+} from "@shared/schema";
+import session from "express-session";
+import MemoryStore from "memorystore";
+import passport from "passport";
+import { Strategy as LocalStrategy } from "passport-local";
+
+declare module "express-session" {
+  interface SessionData {
+    userId: number;
+  }
+}
+
+export async function registerRoutes(app: Express): Promise<Server> {
+  const httpServer = createServer(app);
+
+  // Set up session
+  const SessionStore = MemoryStore(session);
+  app.use(
+    session({
+      secret: process.env.SESSION_SECRET || "habibistay-secret",
+      resave: false,
+      saveUninitialized: false,
+      store: new SessionStore({
+        checkPeriod: 86400000 // prune expired entries every 24h
+      }),
+      cookie: {
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 1 week
+        secure: process.env.NODE_ENV === "production"
+      }
+    })
+  );
+
+  // Set up passport
+  app.use(passport.initialize());
+  app.use(passport.session());
+
+  passport.use(
+    new LocalStrategy(async (username, password, done) => {
+      try {
+        const user = await storage.getUserByUsername(username);
+        if (!user) {
+          return done(null, false, { message: "Incorrect username." });
+        }
+        if (user.password !== password) {
+          return done(null, false, { message: "Incorrect password." });
+        }
+        return done(null, user);
+      } catch (err) {
+        return done(err);
+      }
+    })
+  );
+
+  passport.serializeUser((user: any, done) => {
+    done(null, user.id);
+  });
+
+  passport.deserializeUser(async (id: number, done) => {
+    try {
+      const user = await storage.getUser(id);
+      done(null, user);
+    } catch (err) {
+      done(err);
+    }
+  });
+
+  // Authentication middleware
+  const isAuthenticated = (req: Request, res: Response, next: Function) => {
+    if (req.isAuthenticated()) {
+      return next();
+    }
+    res.status(401).json({ message: "Unauthorized" });
+  };
+
+  // Host middleware
+  const isHost = async (req: Request, res: Response, next: Function) => {
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    
+    const user = await storage.getUser((req.user as any).id);
+    if (!user || !user.isHost) {
+      return res.status(403).json({ message: "Forbidden: Host access required" });
+    }
+    
+    next();
+  };
+
+  // Authentication routes
+  app.post("/api/auth/login", passport.authenticate("local"), (req, res) => {
+    res.json(req.user);
+  });
+
+  app.post("/api/auth/register", async (req, res) => {
+    try {
+      const userData = insertUserSchema.parse(req.body);
+      
+      // Check if username or email already exists
+      const existingUsername = await storage.getUserByUsername(userData.username);
+      if (existingUsername) {
+        return res.status(400).json({ message: "Username already exists" });
+      }
+      
+      const existingEmail = await storage.getUserByEmail(userData.email);
+      if (existingEmail) {
+        return res.status(400).json({ message: "Email already exists" });
+      }
+      
+      const user = await storage.createUser(userData);
+      req.login(user, (err) => {
+        if (err) {
+          return res.status(500).json({ message: "Login failed after registration" });
+        }
+        return res.status(201).json(user);
+      });
+    } catch (error) {
+      res.status(400).json({ message: "Invalid user data" });
+    }
+  });
+
+  app.post("/api/auth/logout", (req, res) => {
+    req.logout((err) => {
+      if (err) {
+        return res.status(500).json({ message: "Logout failed" });
+      }
+      res.status(200).json({ message: "Logged out successfully" });
+    });
+  });
+
+  app.get("/api/auth/user", (req, res) => {
+    if (req.user) {
+      res.json(req.user);
+    } else {
+      res.status(401).json({ message: "Not authenticated" });
+    }
+  });
+
+  // User routes
+  app.get("/api/users/:id", async (req, res) => {
+    try {
+      const user = await storage.getUser(parseInt(req.params.id));
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      res.json(user);
+    } catch (error) {
+      res.status(500).json({ message: "Error fetching user" });
+    }
+  });
+
+  app.put("/api/users/:id", isAuthenticated, async (req, res) => {
+    try {
+      const userId = parseInt(req.params.id);
+      
+      // Check if user is updating their own profile
+      if ((req.user as any).id !== userId) {
+        return res.status(403).json({ message: "Forbidden: Cannot update other users" });
+      }
+      
+      const updatedUser = await storage.updateUser(userId, req.body);
+      if (!updatedUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      res.json(updatedUser);
+    } catch (error) {
+      res.status(500).json({ message: "Error updating user" });
+    }
+  });
+
+  // Property routes
+  app.get("/api/properties", async (req, res) => {
+    try {
+      const filters: any = {};
+      
+      if (req.query.type) filters.type = req.query.type;
+      if (req.query.city) filters.city = req.query.city;
+      if (req.query.country) filters.country = req.query.country;
+      if (req.query.maxPrice) filters.price = parseInt(req.query.maxPrice as string);
+      if (req.query.minBedrooms) filters.bedrooms = parseInt(req.query.minBedrooms as string);
+      if (req.query.minBathrooms) filters.bathrooms = parseInt(req.query.minBathrooms as string);
+      if (req.query.minGuests) filters.maxGuests = parseInt(req.query.minGuests as string);
+      if (req.query.amenities) {
+        filters.amenities = (req.query.amenities as string).split(',');
+      }
+      
+      const properties = await storage.getProperties(Object.keys(filters).length > 0 ? filters : undefined);
+      res.json(properties);
+    } catch (error) {
+      res.status(500).json({ message: "Error fetching properties" });
+    }
+  });
+
+  app.get("/api/properties/:id", async (req, res) => {
+    try {
+      const property = await storage.getProperty(parseInt(req.params.id));
+      if (!property) {
+        return res.status(404).json({ message: "Property not found" });
+      }
+      res.json(property);
+    } catch (error) {
+      res.status(500).json({ message: "Error fetching property" });
+    }
+  });
+
+  app.post("/api/properties", isAuthenticated, isHost, async (req, res) => {
+    try {
+      const propertyData = insertPropertySchema.parse({
+        ...req.body,
+        hostId: (req.user as any).id
+      });
+      
+      const property = await storage.createProperty(propertyData);
+      res.status(201).json(property);
+    } catch (error) {
+      res.status(400).json({ message: "Invalid property data" });
+    }
+  });
+
+  app.put("/api/properties/:id", isAuthenticated, isHost, async (req, res) => {
+    try {
+      const propertyId = parseInt(req.params.id);
+      const property = await storage.getProperty(propertyId);
+      
+      if (!property) {
+        return res.status(404).json({ message: "Property not found" });
+      }
+      
+      // Check if user is the property owner
+      if (property.hostId !== (req.user as any).id) {
+        return res.status(403).json({ message: "Forbidden: Not the property owner" });
+      }
+      
+      const updatedProperty = await storage.updateProperty(propertyId, req.body);
+      res.json(updatedProperty);
+    } catch (error) {
+      res.status(500).json({ message: "Error updating property" });
+    }
+  });
+
+  app.delete("/api/properties/:id", isAuthenticated, isHost, async (req, res) => {
+    try {
+      const propertyId = parseInt(req.params.id);
+      const property = await storage.getProperty(propertyId);
+      
+      if (!property) {
+        return res.status(404).json({ message: "Property not found" });
+      }
+      
+      // Check if user is the property owner
+      if (property.hostId !== (req.user as any).id) {
+        return res.status(403).json({ message: "Forbidden: Not the property owner" });
+      }
+      
+      const success = await storage.deleteProperty(propertyId);
+      if (success) {
+        res.status(204).send();
+      } else {
+        res.status(500).json({ message: "Failed to delete property" });
+      }
+    } catch (error) {
+      res.status(500).json({ message: "Error deleting property" });
+    }
+  });
+
+  app.get("/api/hosts/:id/properties", async (req, res) => {
+    try {
+      const hostId = parseInt(req.params.id);
+      const properties = await storage.getPropertiesByHost(hostId);
+      res.json(properties);
+    } catch (error) {
+      res.status(500).json({ message: "Error fetching host properties" });
+    }
+  });
+
+  // Booking routes
+  app.get("/api/bookings", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const user = await storage.getUser(userId);
+      
+      let bookings;
+      if (user?.isHost) {
+        // Get bookings for all properties owned by this host
+        const hostProperties = await storage.getPropertiesByHost(userId);
+        bookings = [];
+        
+        for (const property of hostProperties) {
+          const propertyBookings = await storage.getBookingsByProperty(property.id);
+          bookings.push(...propertyBookings);
+        }
+      } else {
+        // Get bookings made by this guest
+        bookings = await storage.getBookingsByGuest(userId);
+      }
+      
+      res.json(bookings);
+    } catch (error) {
+      res.status(500).json({ message: "Error fetching bookings" });
+    }
+  });
+
+  app.get("/api/properties/:id/bookings", isAuthenticated, async (req, res) => {
+    try {
+      const propertyId = parseInt(req.params.id);
+      const property = await storage.getProperty(propertyId);
+      
+      if (!property) {
+        return res.status(404).json({ message: "Property not found" });
+      }
+      
+      // Only allow property owner to see all bookings
+      if (property.hostId !== (req.user as any).id) {
+        return res.status(403).json({ message: "Forbidden: Not the property owner" });
+      }
+      
+      const bookings = await storage.getBookingsByProperty(propertyId);
+      res.json(bookings);
+    } catch (error) {
+      res.status(500).json({ message: "Error fetching property bookings" });
+    }
+  });
+
+  app.post("/api/bookings", isAuthenticated, async (req, res) => {
+    try {
+      const bookingData = insertBookingSchema.parse({
+        ...req.body,
+        guestId: (req.user as any).id
+      });
+      
+      // Check if property exists
+      const property = await storage.getProperty(bookingData.propertyId);
+      if (!property) {
+        return res.status(404).json({ message: "Property not found" });
+      }
+      
+      // Check that user is not booking their own property
+      if (property.hostId === (req.user as any).id) {
+        return res.status(400).json({ message: "Cannot book your own property" });
+      }
+      
+      // Check for date conflicts
+      const existingBookings = await storage.getBookingsByProperty(bookingData.propertyId);
+      const checkIn = new Date(bookingData.checkIn);
+      const checkOut = new Date(bookingData.checkOut);
+      
+      const hasConflict = existingBookings.some(booking => {
+        const bookingCheckIn = new Date(booking.checkIn);
+        const bookingCheckOut = new Date(booking.checkOut);
+        
+        return (
+          (checkIn >= bookingCheckIn && checkIn < bookingCheckOut) ||
+          (checkOut > bookingCheckIn && checkOut <= bookingCheckOut) ||
+          (checkIn <= bookingCheckIn && checkOut >= bookingCheckOut)
+        );
+      });
+      
+      if (hasConflict) {
+        return res.status(400).json({ message: "Property is unavailable for selected dates" });
+      }
+      
+      const booking = await storage.createBooking(bookingData);
+      res.status(201).json(booking);
+    } catch (error) {
+      res.status(400).json({ message: "Invalid booking data" });
+    }
+  });
+
+  app.put("/api/bookings/:id", isAuthenticated, async (req, res) => {
+    try {
+      const bookingId = parseInt(req.params.id);
+      const booking = await storage.getBooking(bookingId);
+      
+      if (!booking) {
+        return res.status(404).json({ message: "Booking not found" });
+      }
+      
+      // Only allow guest or property owner to update booking
+      const property = await storage.getProperty(booking.propertyId);
+      if (!property) {
+        return res.status(404).json({ message: "Property not found" });
+      }
+      
+      if (booking.guestId !== (req.user as any).id && property.hostId !== (req.user as any).id) {
+        return res.status(403).json({ message: "Forbidden: Not authorized to update this booking" });
+      }
+      
+      const updatedBooking = await storage.updateBooking(bookingId, req.body);
+      res.json(updatedBooking);
+    } catch (error) {
+      res.status(500).json({ message: "Error updating booking" });
+    }
+  });
+
+  // Review routes
+  app.get("/api/properties/:id/reviews", async (req, res) => {
+    try {
+      const propertyId = parseInt(req.params.id);
+      const reviews = await storage.getReviewsByProperty(propertyId);
+      res.json(reviews);
+    } catch (error) {
+      res.status(500).json({ message: "Error fetching property reviews" });
+    }
+  });
+
+  app.post("/api/reviews", isAuthenticated, async (req, res) => {
+    try {
+      const reviewData = insertReviewSchema.parse({
+        ...req.body,
+        guestId: (req.user as any).id
+      });
+      
+      // Check if property exists
+      const property = await storage.getProperty(reviewData.propertyId);
+      if (!property) {
+        return res.status(404).json({ message: "Property not found" });
+      }
+      
+      // Check if user has booked this property
+      const userBookings = await storage.getBookingsByGuest((req.user as any).id);
+      const hasBooking = userBookings.some(
+        booking => booking.propertyId === reviewData.propertyId && booking.status === "completed"
+      );
+      
+      if (!hasBooking) {
+        return res.status(403).json({ message: "Can only review properties you have stayed at" });
+      }
+      
+      // Check if user has already reviewed this property
+      const userReviews = await storage.getReviewsByGuest((req.user as any).id);
+      const hasReviewed = userReviews.some(review => review.propertyId === reviewData.propertyId);
+      
+      if (hasReviewed) {
+        return res.status(400).json({ message: "You have already reviewed this property" });
+      }
+      
+      const review = await storage.createReview(reviewData);
+      res.status(201).json(review);
+    } catch (error) {
+      res.status(400).json({ message: "Invalid review data" });
+    }
+  });
+
+  // Message routes
+  app.get("/api/messages", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const conversations = await storage.getUserConversations(userId);
+      res.json(conversations);
+    } catch (error) {
+      res.status(500).json({ message: "Error fetching conversations" });
+    }
+  });
+
+  app.get("/api/messages/:userId", isAuthenticated, async (req, res) => {
+    try {
+      const currentUserId = (req.user as any).id;
+      const otherUserId = parseInt(req.params.userId);
+      
+      const messages = await storage.getMessagesBetweenUsers(currentUserId, otherUserId);
+      
+      // Mark messages as read
+      for (const message of messages) {
+        if (message.receiverId === currentUserId && !message.isRead) {
+          await storage.markMessageAsRead(message.id);
+        }
+      }
+      
+      res.json(messages);
+    } catch (error) {
+      res.status(500).json({ message: "Error fetching messages" });
+    }
+  });
+
+  app.post("/api/messages", isAuthenticated, async (req, res) => {
+    try {
+      const messageData = insertMessageSchema.parse({
+        ...req.body,
+        senderId: (req.user as any).id
+      });
+      
+      // Check if receiver exists
+      const receiver = await storage.getUser(messageData.receiverId);
+      if (!receiver) {
+        return res.status(404).json({ message: "Receiver not found" });
+      }
+      
+      const message = await storage.createMessage(messageData);
+      res.status(201).json(message);
+    } catch (error) {
+      res.status(400).json({ message: "Invalid message data" });
+    }
+  });
+
+  // Wishlist routes
+  app.get("/api/wishlists", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const wishlists = await storage.getWishlistsByUser(userId);
+      res.json(wishlists);
+    } catch (error) {
+      res.status(500).json({ message: "Error fetching wishlists" });
+    }
+  });
+
+  app.post("/api/wishlists", isAuthenticated, async (req, res) => {
+    try {
+      const wishlistData = insertWishlistSchema.parse({
+        ...req.body,
+        userId: (req.user as any).id
+      });
+      
+      // Check if property exists
+      const property = await storage.getProperty(wishlistData.propertyId);
+      if (!property) {
+        return res.status(404).json({ message: "Property not found" });
+      }
+      
+      const wishlist = await storage.createWishlist(wishlistData);
+      res.status(201).json(wishlist);
+    } catch (error) {
+      res.status(400).json({ message: "Invalid wishlist data" });
+    }
+  });
+
+  app.delete("/api/wishlists/:id", isAuthenticated, async (req, res) => {
+    try {
+      const wishlistId = parseInt(req.params.id);
+      const wishlist = await storage.getWishlist(wishlistId);
+      
+      if (!wishlist) {
+        return res.status(404).json({ message: "Wishlist not found" });
+      }
+      
+      // Check if user owns the wishlist
+      if (wishlist.userId !== (req.user as any).id) {
+        return res.status(403).json({ message: "Forbidden: Not your wishlist" });
+      }
+      
+      const success = await storage.deleteWishlist(wishlistId);
+      if (success) {
+        res.status(204).send();
+      } else {
+        res.status(500).json({ message: "Failed to delete wishlist" });
+      }
+    } catch (error) {
+      res.status(500).json({ message: "Error deleting wishlist" });
+    }
+  });
+
+  app.get("/api/properties/:id/wishlist", isAuthenticated, async (req, res) => {
+    try {
+      const propertyId = parseInt(req.params.id);
+      const userId = (req.user as any).id;
+      
+      const isInWishlist = await storage.isPropertyInWishlist(userId, propertyId);
+      res.json({ isInWishlist });
+    } catch (error) {
+      res.status(500).json({ message: "Error checking wishlist status" });
+    }
+  });
+
+  return httpServer;
+}

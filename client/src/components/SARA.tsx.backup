@@ -1,0 +1,1280 @@
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useLocation } from 'wouter';
+import { 
+  MessageCircle, X, Send, Calendar, Users, MapPin, ArrowRight, 
+  Home, Search, Star, BotMessageSquare, Loader2, RefreshCw,
+  ThumbsUp, ThumbsDown, Copy, Sparkles, AlertCircle
+} from 'lucide-react';
+import { useProperties } from '@/hooks/useProperty';
+import { usePropertyRecommendations } from '@/hooks/usePropertyRecommendations';
+import { useAuth } from '@/hooks/useAuth';
+import { apiRequest } from '@/lib/queryClient';
+import { Button } from '@/components/ui/button';
+import { Drawer, DrawerContent, DrawerTrigger, DrawerClose, DrawerTitle, DrawerDescription, DrawerHeader, DrawerFooter } from '@/components/ui/drawer';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { SAR_SYMBOL } from '@/lib/constants';
+import { format } from 'date-fns';
+import { v4 as uuidv4 } from 'uuid';
+import { useMediaQuery } from '@/hooks/use-media-query';
+import { useToast } from '@/hooks/use-toast';
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from "@/components/ui/carousel";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+
+interface Message {
+  id: string;
+  sender: 'user' | 'assistant';
+  content: string;
+  timestamp: Date;
+  isError?: boolean;
+  isLoading?: boolean;
+  properties?: any[];
+  options?: {
+    label: string;
+    value: string;
+    icon?: string;
+  }[];
+  feedback?: 'positive' | 'negative';
+  bookingStep?: string;
+  selectedProperty?: any;
+  bookingDetails?: {
+    checkIn?: string;
+    checkOut?: string;
+    guests?: number;
+    propertyId?: number;
+    propertyTitle?: string;
+    amount?: number;
+    paymentId?: string;
+  };
+}
+
+export default function SARA() {
+  const [isOpen, setIsOpen] = useState(false);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [bookingDetails, setBookingDetails] = useState<any>({});
+  const [conversationId, setConversationId] = useState<string>('');
+  const [location, navigate] = useLocation();
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { user } = useAuth();
+  const isMobile = useMediaQuery('(max-width: 768px)');
+  const isTablet = useMediaQuery('(max-width: 1024px) and (min-width: 769px)');
+  const { toast } = useToast();
+
+  // Get a list of properties for basic recommendations
+  const { data: properties } = useProperties();
+  
+  // Setup AI-powered property recommendations
+  const propertyRecommendationsMutation = usePropertyRecommendations();
+  
+  // Function to copy message content to clipboard
+  const copyMessageToClipboard = (content: string) => {
+    navigator.clipboard.writeText(content)
+      .then(() => {
+        toast({
+          title: "Copied to clipboard",
+          description: "Message content has been copied",
+          duration: 2000,
+        });
+      })
+      .catch(() => {
+        toast({
+          title: "Failed to copy",
+          description: "Could not copy text to clipboard",
+          variant: "destructive",
+          duration: 2000,
+        });
+      });
+  };
+  
+  // Function to handle message feedback (thumbs up/down)
+  const handleMessageFeedback = (messageId: string, feedbackType: 'positive' | 'negative') => {
+    // Update the message with feedback
+    setMessages(prev => prev.map(message => 
+      message.id === messageId 
+        ? { ...message, feedback: feedbackType } 
+        : message
+    ));
+    
+    // Log feedback to server
+    if (user) {
+      apiRequest('POST', '/api/feedback', { 
+        messageId, 
+        conversationId,
+        feedbackType,
+        userId: user.id
+      }).catch(err => {
+        console.error('Failed to save feedback:', err);
+      });
+    }
+    
+    // Show toast notification
+    toast({
+      title: feedbackType === 'positive' ? "Thanks for your feedback!" : "We'll improve based on your feedback",
+      description: feedbackType === 'positive' 
+        ? "We're glad this was helpful" 
+        : "We appreciate your honesty",
+      variant: "default",
+      duration: 3000,
+    });
+  };
+
+  // Load previous conversation or initialize with a welcome message
+  useEffect(() => {
+    // Create a new conversation ID if we don't have one
+    if (!conversationId) {
+      setConversationId(uuidv4());
+    }
+
+    // Load previous conversation if user is logged in
+    const loadConversation = async () => {
+      if (user && messages.length === 0) {
+        try {
+          const response = await apiRequest('GET', `/api/sara/conversations?userId=${user.id}`);
+          if (response.ok) {
+            const data = await response.json();
+            if (data.conversation && data.messages && data.messages.length > 0) {
+              // Convert timestamps back to Date objects
+              const formattedMessages = data.messages.map((msg: any) => ({
+                ...msg,
+                timestamp: new Date(msg.timestamp),
+              }));
+              
+              setConversationId(data.conversation.conversationId);
+              setMessages(formattedMessages);
+              return;
+            }
+          }
+        } catch (error) {
+          console.error('Failed to load conversation:', error);
+        }
+      }
+      
+      // If no saved conversation or error, initialize with welcome message
+      if (messages.length === 0) {
+        const welcomeMessage: Message = {
+          id: 'welcome',
+          sender: 'assistant',
+          content: "Hi, I'm SARA, your Sophisticated AI Rental Assistant. How can I help you today?",
+          timestamp: new Date(),
+          options: [
+            { label: 'Find a property', value: 'find_property', icon: 'search' },
+            { label: 'Book a stay', value: 'book_stay', icon: 'calendar' },
+            { label: 'Help with booking', value: 'help_booking', icon: 'help-circle' },
+            { label: 'Local recommendations', value: 'local_recommendations', icon: 'map-pin' }
+          ]
+        };
+        setMessages([welcomeMessage]);
+      }
+    };
+
+    loadConversation();
+  }, [user]);
+
+  // Scroll to bottom when messages change
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages]);
+
+  // Auto-expand on mobile
+  useEffect(() => {
+    const isMobile = window.innerWidth < 768;
+    if (isMobile && isOpen) {
+      // Add a class to make the drawer full-screen on mobile
+      document.body.classList.add('sara-fullscreen');
+    } else {
+      document.body.classList.remove('sara-fullscreen');
+    }
+
+    return () => {
+      document.body.classList.remove('sara-fullscreen');
+    };
+  }, [isOpen]);
+
+  // Save conversation to database
+  const saveConversation = useCallback(async (updatedMessages: Message[]) => {
+    if (!user || !conversationId) return;
+    
+    try {
+      await apiRequest('POST', '/api/sara/conversations', {
+        conversationId,
+        messages: updatedMessages
+      });
+    } catch (error) {
+      console.error('Failed to save conversation:', error);
+    }
+  }, [conversationId, user]);
+  
+  const handleSendMessage = async () => {
+    if (!input.trim() && !bookingDetails.action) return;
+
+    let userMessage: Message;
+    
+    if (bookingDetails.action) {
+      // For booking steps, we're sending structured booking details
+      userMessage = {
+        id: uuidv4(),
+        sender: 'user',
+        content: bookingDetails.userMessage || input,
+        timestamp: new Date(),
+        bookingStep: bookingDetails.action,
+        bookingDetails: bookingDetails
+      };
+    } else {
+      // Normal text message
+      userMessage = {
+        id: uuidv4(),
+        sender: 'user',
+        content: input,
+        timestamp: new Date()
+      };
+    }
+
+    const updatedMessages = [...messages, userMessage];
+    setMessages(updatedMessages);
+    setInput('');
+    setIsLoading(true);
+
+    // Add a temporary loading message
+    const loadingMessageId = uuidv4();
+    const loadingMessage: Message = {
+      id: loadingMessageId,
+      sender: 'assistant',
+      content: 'Thinking...',
+      timestamp: new Date(),
+      isLoading: true
+    };
+    
+    setMessages([...updatedMessages, loadingMessage]);
+
+    try {
+      // Format the context to send to the API
+      const context = {
+        conversationId,
+        messages: messages.map(m => ({
+          role: m.sender === 'user' ? 'user' : 'assistant',
+          content: m.content
+        })),
+        bookingDetails: bookingDetails.action ? bookingDetails : null,
+        user: user ? {
+          id: user.id,
+          name: user.fullName
+        } : null
+      };
+
+      const response = await apiRequest('POST', '/api/ai/assistant/chat', {
+        message: userMessage.content,
+        context: context
+      });
+
+      // Remove the loading message
+      const messagesWithoutLoading = updatedMessages;
+
+      if (response.ok) {
+        const data = await response.json();
+        let assistantMessage: Message = {
+          id: uuidv4(),
+          sender: 'assistant',
+          content: data.message || 'Sorry, I couldn\'t process your request at this time.',
+          timestamp: new Date()
+        };
+
+        // Add properties if they were returned
+        if (data.properties && data.properties.length > 0) {
+          assistantMessage.properties = data.properties;
+        }
+
+        // Add options if they were returned
+        if (data.options && data.options.length > 0) {
+          assistantMessage.options = data.options;
+        }
+
+        // Add booking details if returned
+        if (data.bookingStep) {
+          assistantMessage.bookingStep = data.bookingStep;
+          
+          // If the response includes a booking confirmation
+          if (data.bookingStep === 'confirmation' && data.bookingDetails) {
+            // Store for the payment process
+            if (data.bookingDetails.paymentId) {
+              sessionStorage.setItem('pendingBooking', JSON.stringify({
+                propertyId: data.bookingDetails.propertyId,
+                propertyTitle: data.bookingDetails.propertyTitle,
+                checkIn: data.bookingDetails.checkIn,
+                checkOut: data.bookingDetails.checkOut,
+                guests: data.bookingDetails.guests,
+                amount: data.bookingDetails.amount,
+                paymentId: data.bookingDetails.paymentId
+              }));
+              
+              // Show success toast
+              toast({
+                title: "Booking confirmed!",
+                description: "Your booking has been confirmed. Redirecting to payment...",
+                variant: "default"
+              });
+              
+              // Redirect to success page
+              navigate('/booking-success');
+              setIsOpen(false);
+              return;
+            }
+          }
+        }
+
+        const finalMessages = [...messagesWithoutLoading, assistantMessage];
+        setMessages(finalMessages);
+        
+        // Save conversation to database
+        saveConversation(finalMessages);
+        
+        // Reset booking details after they're processed
+        if (bookingDetails.action) {
+          setBookingDetails({});
+        }
+      } else {
+        // Get error details from response
+        let errorDetails = "Unknown error occurred";
+        try {
+          const errorData = await response.json();
+          errorDetails = errorData.message || errorData.error || "Server error";
+        } catch (e) {
+          errorDetails = `Error ${response.status}: Server error`;
+        }
+        
+        // Handle error response
+        const errorMessage: Message = {
+          id: uuidv4(),
+          sender: 'assistant',
+          content: `Sorry, I encountered an error: ${errorDetails}. Please try again.`,
+          timestamp: new Date(),
+          isError: true
+        };
+        
+        // Show toast for error
+        toast({
+          title: "AI assistant error",
+          description: errorDetails,
+          variant: "destructive"
+        });
+        
+        const finalMessages = [...messagesWithoutLoading, errorMessage];
+        setMessages(finalMessages);
+        saveConversation(finalMessages);
+      }
+    } catch (error: any) {
+      // Remove the loading message
+      const messagesWithoutLoading = messages.filter(m => m.id !== loadingMessageId);
+      
+      // Handle network or unexpected error
+      const errorMessage: Message = {
+        id: uuidv4(),
+        sender: 'assistant',
+        content: `Sorry, I couldn't connect to my services: ${error?.message || 'Network error'}. Please check your connection and try again.`,
+        timestamp: new Date(),
+        isError: true
+      };
+      
+      // Show toast for error
+      toast({
+        title: "Connection error",
+        description: "Failed to connect to AI services. Please check your internet connection.",
+        variant: "destructive"
+      });
+      
+      const finalMessages = [...messagesWithoutLoading, errorMessage];
+      setMessages(finalMessages);
+      saveConversation(finalMessages);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  // These functions are already defined above
+  
+
+  // Initiate the booking process for a property
+  const initiateBooking = (property: any) => {
+    // First, call the existing handlePropertySelect function
+    handlePropertySelect(property);
+    
+    // Show success toast notifying user
+    toast({
+      title: "Starting booking process",
+      description: `Getting ready to book ${property.title}`,
+      duration: 2000,
+    });
+  };
+
+  // Handle AI-powered property search and recommendations
+  const handlePropertySearch = (searchCriteria: { 
+    location?: string, 
+    budget?: number, 
+    guests?: number,
+    amenities?: string[]
+  }) => {
+    setIsLoading(true);
+    
+    // Add a user message about the search
+    let searchDescription = 'I\'m looking for';
+    if (searchCriteria.location) searchDescription += ` a place in ${searchCriteria.location}`;
+    if (searchCriteria.budget) searchDescription += ` with a budget of ${SAR_SYMBOL}${searchCriteria.budget}`;
+    if (searchCriteria.guests) searchDescription += ` for ${searchCriteria.guests} guests`;
+    if (searchCriteria.amenities && searchCriteria.amenities.length > 0) 
+      searchDescription += ` with ${searchCriteria.amenities.join(', ')}`;
+    
+    const userMessage: Message = {
+      id: uuidv4(),
+      sender: 'user',
+      content: searchDescription,
+      timestamp: new Date(),
+    };
+    
+    const updatedMessages = [...messages, userMessage];
+    setMessages(updatedMessages);
+    
+    // Trigger AI recommendations via the mutation
+    propertyRecommendationsMutation.mutate(searchCriteria, {
+      onSuccess: (data) => {
+        // Extract the relevant data
+        const aiRecommendations = data.recommendations.recommendations || [];
+        const aiSummary = data.recommendations.summary || '';
+        
+        // Create assistant response with recommendations
+        const assistantMessage: Message = {
+          id: uuidv4(),
+          sender: 'assistant',
+          content: aiSummary || 'Here are some properties that match your criteria:',
+          timestamp: new Date(),
+          properties: data.properties.map(p => ({
+            ...p,
+            score: aiRecommendations.find(r => r.id === p.id)?.score || 0,
+            explanation: aiRecommendations.find(r => r.id === p.id)?.explanation || '',
+            matchedCriteria: aiRecommendations.find(r => r.id === p.id)?.matchedCriteria || []
+          }))
+        };
+        
+        const finalMessages = [...updatedMessages, assistantMessage];
+        setMessages(finalMessages);
+        
+        // Save conversation to database
+        if (user && conversationId) {
+          saveConversation(finalMessages);
+        }
+      },
+      onError: (error) => {
+        // Fallback to basic properties if AI recommendations fail
+        const assistantMessage: Message = {
+          id: uuidv4(),
+          sender: 'assistant',
+          content: 'I found some properties that might interest you:',
+          timestamp: new Date(),
+          properties: properties?.slice(0, 3) || []
+        };
+        
+        const finalMessages = [...updatedMessages, assistantMessage];
+        setMessages(finalMessages);
+        
+        // Save conversation to database
+        if (user && conversationId) {
+          saveConversation(finalMessages);
+        }
+        
+        // Show error toast
+        toast({
+          title: "Recommendation Error",
+          description: error.message || "Failed to get personalized recommendations",
+          variant: "destructive"
+        });
+      },
+      onSettled: () => {
+        setIsLoading(false);
+      }
+    });
+  };
+
+  const handleOptionClick = (option: { label: string; value: string }) => {
+    if (option.value === 'find_property') {
+      // Trigger AI property search
+      const searchCriteria = {
+        // Default empty search with basic filtering
+        guests: 2
+      };
+      handlePropertySearch(searchCriteria);
+    } else {
+      setInput(`I want to ${option.label.toLowerCase()}`);
+      handleSendMessage();
+    }
+  };
+
+  const handlePropertySelect = (property: any) => {
+    setBookingDetails({
+      action: 'select_property',
+      propertyId: property.id,
+      propertyTitle: property.title,
+      userMessage: `I'm interested in ${property.title} in ${property.city}`
+    });
+    
+    setTimeout(() => {
+      handleSendMessage();
+    }, 100);
+  };
+
+  const handleBookingDateSelect = (date: Date, type: 'checkIn' | 'checkOut') => {
+    try {
+      // Ensure date is valid before formatting
+      const validDate = new Date(date);
+      if (isNaN(validDate.getTime())) {
+        throw new Error('Invalid date');
+      }
+      
+      // Store the ISO string format for easier processing
+      const dateString = validDate.toISOString().split('T')[0]; // 'yyyy-MM-dd' format
+      const formattedDateDisplay = validDate.toLocaleDateString('en-US', {
+        month: 'short',
+        day: '2-digit',
+        year: 'numeric'
+      });
+      
+      setBookingDetails({
+        ...bookingDetails,
+        action: 'select_dates',
+        [type]: dateString,
+        userMessage: `I want to ${type === 'checkIn' ? 'check in' : 'check out'} on ${formattedDateDisplay}`
+      });
+      
+      setTimeout(() => {
+        handleSendMessage();
+      }, 100);
+    } catch (error) {
+      console.error('Date error:', error);
+      toast({
+        title: "Error with date selection",
+        description: "Please try selecting a different date",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleGuestsSelect = (guests: number) => {
+    setBookingDetails({
+      ...bookingDetails,
+      action: 'select_guests',
+      guests,
+      userMessage: `I'll be traveling with ${guests} ${guests === 1 ? 'guest' : 'guests'}`
+    });
+    
+    setTimeout(() => {
+      handleSendMessage();
+    }, 100);
+  };
+
+  const handleConfirmBooking = () => {
+    setBookingDetails({
+      ...bookingDetails,
+      action: 'confirm_booking',
+      userMessage: 'Yes, I want to confirm this booking'
+    });
+    
+    setTimeout(() => {
+      handleSendMessage();
+    }, 100);
+  };
+
+  const handlePaymentMethodSelect = (method: string) => {
+    setBookingDetails({
+      ...bookingDetails,
+      action: 'select_payment',
+      paymentMethod: method,
+      userMessage: `I'll pay with ${method}`
+    });
+    
+    setTimeout(() => {
+      handleSendMessage();
+    }, 100);
+  };
+
+  return (
+    <>
+      {/* Chat trigger button - fixed at bottom right */}
+      <Drawer open={isOpen} onOpenChange={setIsOpen}>
+        <DrawerTrigger asChild>
+          <Button
+            size="icon"
+            className={`fixed ${isMobile ? 'bottom-20 right-4' : isTablet ? 'bottom-12 right-6' : 'bottom-8 right-8'} 
+            h-16 w-16 sm:h-14 sm:w-14 rounded-full shadow-lg z-50 
+            bg-primary hover:bg-primary/90 flex items-center justify-center 
+            animate-bounce-slow transition-all duration-300 hover:scale-110 group
+            border-4 border-white dark:border-gray-800
+            ${messages.some(m => m.isError) ? 'animate-pulse bg-destructive border-destructive/20' : ''}
+            ${isLoading ? 'animate-none bg-primary/80' : ''}`}
+            aria-label="Open SARA AI Assistant"
+          >
+            <div className="relative flex items-center justify-center">
+              {isLoading ? (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="h-8 w-8 sm:h-7 sm:w-7 rounded-full border-4 border-white border-t-transparent animate-spin"></div>
+                </div>
+              ) : messages.some(m => m.isError) ? (
+                <AlertCircle className="h-8 w-8 sm:h-7 sm:w-7 text-white animate-pulse" />
+              ) : (
+                <MessageCircle className="h-8 w-8 sm:h-7 sm:w-7 group-hover:scale-110 transition-transform duration-300" />
+              )}
+
+              {/* Notification pulse animation */}
+              <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-300 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-sky-400"></span>
+              </span>
+
+              {/* AI Badge */}
+              <span className="absolute -top-2 -right-2 text-xs font-bold bg-blue-600 text-white rounded-full h-5 w-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 shadow-md">
+                AI
+              </span>
+
+              {/* Show error count badge if there are errors */}
+              {messages.some(m => m.isError) && (
+                <span className="absolute -bottom-2 -left-2 text-xs font-bold bg-destructive text-white rounded-full h-5 w-5 flex items-center justify-center shadow-md">
+                  {messages.filter(m => m.isError).length}
+                </span>
+              )}
+            </div>
+          </Button>
+        </DrawerTrigger>
+        
+        <DrawerContent className="h-[85svh] p-0 max-w-md mx-auto rounded-t-xl">
+          {/* Chat header */}
+          <div className="border-b p-4 flex justify-between items-center bg-primary text-primary-foreground">
+            <div className="flex items-center gap-2">
+              <Avatar className="h-8 w-8">
+                <AvatarImage src="/sara-avatar.png" alt="SARA" />
+                <AvatarFallback>SA</AvatarFallback>
+              </Avatar>
+              <div>
+                <p className="font-semibold">SARA</p>
+                <p className="text-xs opacity-80">Always here to help</p>
+              </div>
+            </div>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="text-primary-foreground"
+              onClick={() => setIsOpen(false)}
+            >
+              <X className="h-5 w-5" />
+            </Button>
+          </div>
+          
+          {/* Chat messages */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 h-[calc(85svh-120px)]">
+            {messages.map((message) => (
+              <div 
+                key={message.id} 
+                className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+              >
+                <div 
+                  className={`max-w-[80%] ${
+                    message.sender === 'user' 
+                      ? 'bg-primary text-primary-foreground rounded-l-xl rounded-tr-xl' 
+                      : message.isError 
+                        ? 'bg-destructive/10 border border-destructive/20 rounded-r-xl rounded-tl-xl' 
+                        : 'bg-muted rounded-r-xl rounded-tl-xl'
+                  } p-3 shadow-sm transition-all duration-300 ease-in-out ${
+                    message.isLoading ? 'animate-pulse opacity-80' : 'opacity-100'
+                  }`}
+                >
+                  {/* Message sender icon for assistant */}
+                  {message.sender === 'assistant' && (
+                    <div className="flex items-center mb-1">
+                      {message.isLoading ? (
+                        <div className="flex items-center text-primary">
+                          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                          <span className="text-xs font-medium">SARA is thinking...</span>
+                        </div>
+                      ) : message.isError ? (
+                        <div className="flex items-center text-destructive">
+                          <AlertCircle className="h-3 w-3 mr-1" />
+                          <span className="text-xs font-medium">Error</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center text-primary">
+                          <BotMessageSquare className="h-3 w-3 mr-1" />
+                          <span className="text-xs font-medium">SARA</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* Message content */}
+                  <div className="group relative">
+                    <p className="text-sm">{message.content}</p>
+                    
+                    {/* Message actions (visible on hover) - only for assistant messages */}
+                    {message.sender === 'assistant' && !message.isLoading && (
+                      <div className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex gap-1">
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-6 w-6" 
+                                  onClick={() => copyMessageToClipboard(message.content)}
+                                >
+                                  <Copy size={12} />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="left">
+                                <p>Copy to clipboard</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                          
+                          {!message.feedback && !message.isError && (
+                            <>
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button 
+                                      variant="ghost" 
+                                      size="icon" 
+                                      className="h-6 w-6 text-green-500" 
+                                      onClick={() => handleMessageFeedback(message.id, 'positive')}
+                                    >
+                                      <ThumbsUp size={12} />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="left">
+                                    <p>This was helpful</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                              
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button 
+                                      variant="ghost" 
+                                      size="icon" 
+                                      className="h-6 w-6 text-red-500" 
+                                      onClick={() => handleMessageFeedback(message.id, 'negative')}
+                                    >
+                                      <ThumbsDown size={12} />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="left">
+                                    <p>This wasn't helpful</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Feedback badge */}
+                  {message.feedback && (
+                    <div className="mt-1">
+                      <Badge variant="outline" className={
+                        message.feedback === 'positive' ? 'text-green-500 bg-green-50' : 'text-red-500 bg-red-50'
+                      }>
+                        {message.feedback === 'positive' ? (
+                          <ThumbsUp size={10} className="mr-1" />
+                        ) : (
+                          <ThumbsDown size={10} className="mr-1" />
+                        )}
+                        Feedback sent
+                      </Badge>
+                    </div>
+                  )}
+                  
+                  {/* Error action buttons */}
+                  {message.isError && (
+                    <div className="mt-2 flex gap-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="text-xs" 
+                        onClick={() => setMessages(messages.filter(m => m.id !== message.id))}
+                      >
+                        Dismiss
+                      </Button>
+                      <Button 
+                        variant="secondary" 
+                        size="sm" 
+                        className="text-xs" 
+                        onClick={() => {
+                          const prevUserMessage = messages.slice().reverse().find(m => m.sender === 'user');
+                          if (prevUserMessage) {
+                            setInput(prevUserMessage.content);
+                          }
+                          setMessages(messages.filter(m => m.id !== message.id));
+                        }}
+                      >
+                        <RefreshCw size={12} className="mr-1" /> Retry
+                      </Button>
+                    </div>
+                  )}
+                  
+                  {/* Timestamp */}
+                  <p className={`text-xs mt-1 ${message.sender === 'user' ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
+                    {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                  
+                  {/* Enhanced Quick Reply Options */}
+                  {message.options && message.options.length > 0 && (
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {message.options.map((option, index) => (
+                        <Button
+                          key={index}
+                          variant="outline"
+                          size="sm"
+                          className={`
+                            text-sm justify-start hover:scale-105 transition-transform 
+                            hover:bg-primary/10 hover:border-primary/30 hover:text-primary
+                            flex items-center gap-2 px-4 py-2 shadow-sm
+                          `}
+                          onClick={() => handleOptionClick(option)}
+                        >
+                          {option.icon && (
+                            <span className="bg-primary/10 text-primary p-1.5 rounded-full">
+                              {option.icon === 'search' && <Search className="h-4 w-4" />}
+                              {option.icon === 'calendar' && <Calendar className="h-4 w-4" />}
+                              {option.icon === 'help-circle' && <MessageCircle className="h-4 w-4" />}
+                              {option.icon === 'map-pin' && <MapPin className="h-4 w-4" />}
+                            </span>
+                          )}
+                          <span>{option.label}</span>
+                        </Button>
+                      ))}
+                    </div>
+                  )}
+                  
+                  {/* Property Recommendations - Enhanced Responsive Grid with Debug Info */}
+                  {message.properties && Array.isArray(message.properties) && message.properties.length > 0 && (
+                    <div className="mt-4 w-full">
+                      <div className="text-xs text-muted-foreground mb-2">
+                        Found {message.properties.length} properties matching your search criteria
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {message.properties.slice(0, 4).map((property, index) => (
+                          <Card key={index} className="overflow-hidden hover:shadow-md transition-shadow duration-300">
+                            <div className="h-40 sm:h-36 relative">
+                              <img 
+                                src={property.images?.[0] || "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60"} 
+                                alt={property.title} 
+                                className="w-full h-full object-cover"
+                              />
+                              <Badge className="absolute top-2 right-2 font-semibold bg-white/90 text-black">
+                                {SAR_SYMBOL} {property.price}/night
+                              </Badge>
+                              {property.score && (
+                                <Badge className="absolute top-2 left-2 bg-primary">
+                                  <Star className="h-3 w-3 mr-1 fill-current" /> {Math.round(property.score * 100)}% match
+                                </Badge>
+                              )}
+                            </div>
+                            <CardContent className="p-3">
+                              <h4 className="font-medium text-sm truncate">{property.title}</h4>
+                              <p className="text-xs text-muted-foreground flex items-center mt-1">
+                                <MapPin className="h-3 w-3 mr-1" />
+                                {property.city}, {property.country}
+                              </p>
+                              
+                              {/* Property details with badges */}
+                              <div className="flex flex-wrap gap-2 mt-2 text-xs">
+                                <Badge variant="outline" className="font-normal">
+                                  <Home className="h-3 w-3 mr-1" />
+                                  {property.bedrooms} bd • {property.bathrooms} ba
+                                </Badge>
+                                <Badge variant="outline" className="font-normal">
+                                  <Users className="h-3 w-3 mr-1" />
+                                  {property.maxGuests || 2} guests
+                                </Badge>
+                              </div>
+                              
+                              {/* AI explanation of why this property matches */}
+                              {property.explanation && (
+                                <div className="mt-2 p-2 bg-muted/50 rounded-sm text-xs">
+                                  <p className="font-medium mb-0.5">Why this is a good match:</p>
+                                  <p className="text-muted-foreground line-clamp-2">{property.explanation}</p>
+                                </div>
+                              )}
+                              
+                              {/* Matched criteria as badges */}
+                              {property.matchedCriteria && property.matchedCriteria.length > 0 && (
+                                <div className="flex flex-wrap gap-1 mt-2">
+                                  {property.matchedCriteria.slice(0, 3).map((criteria: string, idx: number) => (
+                                    <Badge key={idx} variant="secondary" className="text-[10px] h-5">
+                                      {criteria}
+                                    </Badge>
+                                  ))}
+                                  {property.matchedCriteria.length > 3 && (
+                                    <Badge variant="secondary" className="text-[10px] h-5">
+                                      +{property.matchedCriteria.length - 3} more
+                                    </Badge>
+                                  )}
+                                </div>
+                              )}
+                            </CardContent>
+                            <CardFooter className="p-3 pt-0 flex flex-col sm:flex-row gap-2">
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                className="w-full text-xs"
+                                onClick={() => navigate(`/property/${property.id}`)}
+                              >
+                                View Details
+                              </Button>
+                              <Button 
+                                size="sm" 
+                                className="w-full text-xs"
+                                onClick={() => initiateBooking(property)}
+                              >
+                                Book Now
+                              </Button>
+                            </CardFooter>
+                          </Card>
+                        ))}
+                      </div>
+                      
+                      {/* Show more properties button if there are many */}
+                      {message.properties.length > 4 && (
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="mt-2 text-xs w-full"
+                          onClick={() => navigate('/properties')}
+                        >
+                          View all {message.properties.length} properties <ArrowRight className="ml-1 h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* Enhanced Booking Steps UI */}
+                  {message.bookingStep === 'date_selection' && (
+                    <div className="mt-4 bg-gradient-to-br from-background to-muted/20 rounded-lg p-4 border border-border/30 shadow-sm">
+                      <h5 className="font-medium text-sm mb-3 flex items-center text-primary">
+                        <Calendar className="h-4 w-4 mr-2" />
+                        Select Your Check-in Date
+                      </h5>
+                      <div className="grid grid-cols-2 gap-3">
+                        <Button
+                          variant="outline"
+                          className="text-sm justify-start h-auto py-3 px-4 hover:bg-primary/10 hover:text-primary hover:border-primary/30"
+                          onClick={() => handleBookingDateSelect(new Date(), 'checkIn')}
+                        >
+                          <span className="bg-primary/10 text-primary p-1.5 rounded-full mr-2">
+                            <Calendar className="h-4 w-4" />
+                          </span>
+                          Today
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="text-sm justify-start h-auto py-3 px-4 hover:bg-primary/10 hover:text-primary hover:border-primary/30"
+                          onClick={() => {
+                            const tomorrow = new Date();
+                            tomorrow.setDate(tomorrow.getDate() + 1);
+                            handleBookingDateSelect(tomorrow, 'checkIn');
+                          }}
+                        >
+                          <span className="bg-primary/10 text-primary p-1.5 rounded-full mr-2">
+                            <Calendar className="h-4 w-4" />
+                          </span>
+                          Tomorrow
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="text-sm justify-start h-auto py-3 px-4 hover:bg-primary/10 hover:text-primary hover:border-primary/30"
+                          onClick={() => {
+                            const nextWeek = new Date();
+                            nextWeek.setDate(nextWeek.getDate() + 7);
+                            handleBookingDateSelect(nextWeek, 'checkIn');
+                          }}
+                        >
+                          <span className="bg-primary/10 text-primary p-1.5 rounded-full mr-2">
+                            <Calendar className="h-4 w-4" />
+                          </span>
+                          Next Week
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="text-sm justify-start h-auto py-3 px-4 hover:bg-primary/10 hover:text-primary hover:border-primary/30"
+                          onClick={() => {
+                            const nextMonth = new Date();
+                            nextMonth.setMonth(nextMonth.getMonth() + 1);
+                            handleBookingDateSelect(nextMonth, 'checkIn');
+                          }}
+                        >
+                          <span className="bg-primary/10 text-primary p-1.5 rounded-full mr-2">
+                            <Calendar className="h-4 w-4" />
+                          </span>
+                          Next Month
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {message.bookingStep === 'checkout_date' && (
+                    <div className="mt-4 bg-gradient-to-br from-background to-muted/20 rounded-lg p-4 border border-border/30 shadow-sm">
+                      <h5 className="font-medium text-sm mb-3 flex items-center text-primary">
+                        <Calendar className="h-4 w-4 mr-2" />
+                        Select Your Stay Duration
+                      </h5>
+                      <div className="grid grid-cols-2 gap-3">
+                        <Button
+                          variant="outline"
+                          className="text-sm justify-start h-auto py-3 px-4 hover:bg-primary/10 hover:text-primary hover:border-primary/30"
+                          onClick={() => {
+                            const checkOut = new Date(bookingDetails.checkIn);
+                            checkOut.setDate(checkOut.getDate() + 1);
+                            handleBookingDateSelect(checkOut, 'checkOut');
+                          }}
+                        >
+                          <span className="bg-primary/10 text-primary p-1.5 rounded-full mr-2">
+                            <Calendar className="h-4 w-4" />
+                          </span>
+                          1 Night
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="text-sm justify-start h-auto py-3 px-4 hover:bg-primary/10 hover:text-primary hover:border-primary/30"
+                          onClick={() => {
+                            const checkOut = new Date(bookingDetails.checkIn);
+                            checkOut.setDate(checkOut.getDate() + 2);
+                            handleBookingDateSelect(checkOut, 'checkOut');
+                          }}
+                        >
+                          <span className="bg-primary/10 text-primary p-1.5 rounded-full mr-2">
+                            <Calendar className="h-4 w-4" />
+                          </span>
+                          2 Nights
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="text-sm justify-start h-auto py-3 px-4 hover:bg-primary/10 hover:text-primary hover:border-primary/30"
+                          onClick={() => {
+                            const checkOut = new Date(bookingDetails.checkIn);
+                            checkOut.setDate(checkOut.getDate() + 3);
+                            handleBookingDateSelect(checkOut, 'checkOut');
+                          }}
+                        >
+                          <span className="bg-primary/10 text-primary p-1.5 rounded-full mr-2">
+                            <Calendar className="h-4 w-4" />
+                          </span>
+                          3 Nights
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="text-sm justify-start h-auto py-3 px-4 hover:bg-primary/10 hover:text-primary hover:border-primary/30"
+                          onClick={() => {
+                            const checkOut = new Date(bookingDetails.checkIn);
+                            checkOut.setDate(checkOut.getDate() + 7);
+                            handleBookingDateSelect(checkOut, 'checkOut');
+                          }}
+                        >
+                          <span className="bg-primary/10 text-primary p-1.5 rounded-full mr-2">
+                            <Calendar className="h-4 w-4" />
+                          </span>
+                          Weekly (7 Nights)
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {message.bookingStep === 'guest_selection' && (
+                    <div className="mt-4 bg-gradient-to-br from-background to-muted/20 rounded-lg p-4 border border-border/30 shadow-sm">
+                      <h5 className="font-medium text-sm mb-3 flex items-center text-primary">
+                        <Users className="h-4 w-4 mr-2" />
+                        How many guests will be staying?
+                      </h5>
+                      <div className="flex justify-center gap-4">
+                        {[1, 2, 3, 4].map(num => (
+                          <Button
+                            key={num}
+                            variant="outline"
+                            className="w-12 h-12 rounded-full hover:bg-primary/10 hover:text-primary hover:border-primary/30 text-base font-medium hover:scale-110 transition-transform"
+                            onClick={() => handleGuestsSelect(num)}
+                          >
+                            {num}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {message.bookingStep === 'booking_summary' && (
+                    <div className="mt-4 bg-gradient-to-br from-background to-muted/20 rounded-lg p-4 border border-border/30 shadow-sm">
+                      <h5 className="font-medium text-base mb-3 flex items-center text-primary">
+                        <Sparkles className="h-4 w-4 mr-2" />
+                        Booking Summary
+                      </h5>
+                      <Card className="p-4 mb-4">
+                        <div className="space-y-3 text-sm">
+                          <div className="flex items-start bg-muted/30 p-2 rounded-md">
+                            <Home className="h-5 w-5 mr-3 flex-shrink-0 text-primary" />
+                            <span className="font-medium">{bookingDetails.propertyTitle}</span>
+                          </div>
+                          <div className="flex items-start bg-muted/30 p-2 rounded-md">
+                            <Calendar className="h-5 w-5 mr-3 flex-shrink-0 text-primary" />
+                            <div>
+                              <div className="font-medium">{bookingDetails.checkIn && format(new Date(bookingDetails.checkIn), 'MMM dd, yyyy')}</div>
+                              <div className="text-muted-foreground flex items-center">
+                                <ArrowRight className="h-3 w-3 mx-1" />
+                                {bookingDetails.checkOut && format(new Date(bookingDetails.checkOut), 'MMM dd, yyyy')}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-start bg-muted/30 p-2 rounded-md">
+                            <Users className="h-5 w-5 mr-3 flex-shrink-0 text-primary" />
+                            <span className="font-medium">{bookingDetails.guests} {bookingDetails.guests === 1 ? 'Guest' : 'Guests'}</span>
+                          </div>
+                          <Separator className="my-2" />
+                          <div className="flex justify-between items-center">
+                            <span className="font-semibold text-base">Total:</span>
+                            <span className="font-bold text-lg text-primary">{SAR_SYMBOL} {bookingDetails.amount}</span>
+                          </div>
+                        </div>
+                      </Card>
+                      <Button 
+                        className="w-full py-3"
+                        size="lg"
+                        onClick={handleConfirmBooking}
+                      >
+                        <span className="mr-2">Confirm Booking</span> <ArrowRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                  
+                  {message.bookingStep === 'payment_selection' && (
+                    <div className="mt-4 bg-gradient-to-br from-background to-muted/20 rounded-lg p-4 border border-border/30 shadow-sm">
+                      <h5 className="font-medium text-base mb-3 flex items-center text-primary">
+                        <Sparkles className="h-4 w-4 mr-2" />
+                        Select Payment Method
+                      </h5>
+                      <div className="grid grid-cols-1 gap-3">
+                        <Button 
+                          variant="outline" 
+                          className="w-full justify-start text-sm p-4 py-6 hover:bg-primary/10 hover:text-primary hover:border-primary/30"
+                          onClick={() => handlePaymentMethodSelect('credit_card')}
+                        >
+                          <div className="bg-primary/10 text-primary p-2 rounded-full mr-3">
+                            <span className="text-lg">💳</span>
+                          </div>
+                          <span className="font-medium">Credit Card</span>
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          className="w-full justify-start text-sm p-4 py-6 hover:bg-primary/10 hover:text-primary hover:border-primary/30"
+                          onClick={() => handlePaymentMethodSelect('mada')}
+                        >
+                          <div className="bg-primary/10 text-primary p-2 rounded-full mr-3">
+                            <span className="text-lg">💳</span>
+                          </div>
+                          <span className="font-medium">Mada</span>
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          className="w-full justify-start text-sm p-4 py-6 hover:bg-primary/10 hover:text-primary hover:border-primary/30"
+                          onClick={() => handlePaymentMethodSelect('apple_pay')}
+                        >
+                          <div className="bg-primary/10 text-primary p-2 rounded-full mr-3">
+                            <span className="text-lg">🍎</span>
+                          </div>
+                          <span className="font-medium">Apple Pay</span>
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+            
+            {/* Loading indicator */}
+            {isLoading && (
+              <div className="flex justify-start">
+                <div className="bg-muted rounded-lg p-3 max-w-[80%]">
+                  <div className="flex space-x-2 items-center">
+                    <div className="h-2 w-2 bg-primary rounded-full animate-bounce"></div>
+                    <div className="h-2 w-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                    <div className="h-2 w-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* Invisible div for auto-scrolling */}
+            <div ref={messagesEndRef} />
+          </div>
+          
+          {/* Chat input */}
+          <div className="border-t p-3 flex gap-2 bg-background">
+            <div className="relative flex-1">
+              <Input
+                placeholder={isLoading ? "SARA is thinking..." : "Type a message..."}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && !isLoading && handleSendMessage()}
+                className={`flex-1 pr-10 ${isLoading ? 'text-muted-foreground bg-muted/40' : ''}`}
+                disabled={isLoading}
+              />
+              {input.trim().length > 0 && (
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="absolute right-1 top-1/2 transform -translate-y-1/2 h-7 w-7 text-muted-foreground"
+                  onClick={() => setInput('')}
+                  type="button"
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              )}
+            </div>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    size="icon"
+                    onClick={handleSendMessage}
+                    disabled={isLoading || (!input.trim() && !bookingDetails.action)}
+                    className={`transition-all duration-300 ${isLoading ? 'bg-primary/70' : ''}`}
+                  >
+                    {isLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  <p>{isLoading ? "SARA is processing..." : "Send message"}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+        </DrawerContent>
+      </Drawer>
+    </>
+  );
+}

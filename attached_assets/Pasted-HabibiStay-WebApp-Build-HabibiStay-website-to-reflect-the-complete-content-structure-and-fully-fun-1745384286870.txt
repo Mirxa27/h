@@ -1,0 +1,281 @@
+HabibiStay WebApp
+Build HabibiStay website to reflect the complete content, structure, and fully functional as per outlined below. The website serves guests, property owners, and investors in Riyadh, Saudi Arabia, and should be intuitive, visually appealing, and fully operational. Ensure the design aligns with the specified color scheme and typography, delivering a seamless experience across all pages and devices.
+Header Navigation
+* Links: Home, For Guests, For Property Owners (sub), For Investors(sub), About Us, Success Stories(sub), Blog(sub), Contact Us
+* User Actions: Login / Sign Up
+* Language Toggle: English / العربية
+* Design: Sticky header with brand color #2957c3 (blue), featuring a prominent "Book Now" button for guests.
+
+1. Home Page
+* Hero Section:
+    * Headline: "HabibiStay: Where Exceptional Stays Meet Effortless Wealth"
+    * Sub-Headline: "Book your dream getaway, unlock your property’s potential, or invest with confidence—HabibiStay makes it all possible with trust and ease."
+    * Visual: Stunning image of a luxurious Riyadh villa with a city skyline backdrop.
+    * CTAs:
+        * [Book Your Stay] (Guests)
+        * [List Your Property] (Owners)
+        * [Grow Your Wealth] (Investors)
+* Quick Search Bar:
+    * Label: "Find Your Perfect Stay"
+    * Fields: Location (default: Riyadh), Check-In, Check-Out, Guests
+    * Action: [Search] button
+* Why HabibiStay?
+    * Tagline: "Your Trusted Partner in Every Journey"
+    * Columns:
+        1. For Guests: "Unforgettable stays with premium comfort and care."
+        2. For Owners: "Effortless income from your property, managed by experts."
+        3. For Investors: "Secure, rewarding returns with zero hassle."
+    * CTA: [Discover More] (scrolls to respective sections)
+* Featured Properties:
+    * Headline: "Explore Our Top Picks in Riyadh"
+    * Carousel:
+        * Luxury Villa in Al Rajhi Grand Mosque Area: Spacious, modern, pool included.
+        * Cozy Apartment in Olaya District: Central, stylish, perfect for travelers.
+        * Family Home in Al Malqa: Quiet, fully equipped, near parks.
+    * CTA: [View All Properties]
+* Testimonial Teaser:
+    * Quote: "HabibiStay turned my property into a goldmine without me lifting a finger!" – Ahmed, Riyadh Property Owner
+    * CTA: [Read More Stories]
+
+2. For Guests
+* Hero Section:
+    * Headline: "Your Perfect Stay Awaits with HabibiStay"
+    * Sub-Headline: "From cozy retreats to luxurious escapes, find a home away from home with unmatched comfort and service."
+    * Visual: Warm image of a guest relaxing in a stylish Riyadh apartment.
+    * CTA: [Search Stays Now]
+* Why Book with Us?
+    * Headline: "A Stay That Feels Like Home"
+    * Features:
+        * Premium Comfort: Spotless properties with top-tier amenities.
+        * 24/7 Support: Our team is always here to assist you.
+        * Trusted Quality: Every stay meets our high standards.
+        * Easy Booking: Secure and flexible, tailored to your needs.
+    * CTA: [Browse Properties]
+* Booking Process:
+    * Headline: "Book in Just a Few Clicks"
+    * Steps:
+        1. Search: Pick your dates and location.
+        2. Choose: Explore properties with real-time availability.
+        3. Book: Secure your stay with a seamless checkout.
+    * CTA: [Start Booking]
+* Guest Reviews:
+    * Quote: "The best stay I’ve had in Riyadh—clean, comfy, and the team was amazing!" – Carlos, Guest from Spain
+    * CTA: [See More Reviews]
+
+3. For Property Owners
+* Hero Section:
+    * Headline: "Unlock Your Property’s Full Potential with HabibiStay"
+    * Sub-Headline: "Let us manage your property with care, so you can enjoy steady income without the stress."
+    * Visual: Image of a happy property owner handing over keys to a HabibiStay manager.
+    * CTA: [Partner with Us]
+* Why Partner with HabibiStay?
+    * Headline: "Effortless Income, Expert Care"
+    * Benefits:
+        * Hands-Off Management: We handle tenants, maintenance, and more.
+        * Maximized Earnings: Our smart strategies boost your income.
+        * Trusted Partnership: Your property is in safe, reliable hands.
+        * Clear Insights: Stay updated with regular performance reports.
+    * Profit Split: "You keep the lion’s share of the profits while we do the work—our success is tied to yours."
+    * CTA: [Get Started]
+* How It Works:
+    * Headline: "From Listing to Earning, We’ve Got You Covered"
+    * Steps:
+        1. Sign Up: Tell us about your property.
+        2. We Manage: From marketing to guest care, we take over.
+        3. You Earn: Sit back and enjoy your income.
+    * CTA: [List Your Property]
+* Owner Testimonial:
+    * Quote: "HabibiStay is like a family I can trust—my property’s never been more profitable!" – Youssef, Riyadh Owner
+    * CTA: [Hear More]
+
+4. For Investors
+* Hero Section:
+    * Headline: "Grow Your Wealth with HabibiStay’s Proven Approach"
+    * Sub-Headline: "Secure, rewarding opportunities in Riyadh’s booming market—whether you own a property or not."
+    * Visual: Image of a confident investor reviewing a dashboard with a Riyadh skyline.
+    * CTA: [Invest Now]
+* Investment Options:
+    * Headline: "Choose Your Path to Prosperity"
+    * Options:
+        1. Capital Investors: "Invest with us and enjoy steady, reliable returns with no effort."
+        2. International Investors: "We’ll find and manage a Riyadh property for you—watch it grow in value and income."
+    * Benefits:
+        * Hassle-Free: We manage everything, you reap the rewards.
+        * Trusted Returns: A secure way to build wealth you can count on.
+        * Riyadh Advantage: Tap into a city on the rise.
+    * CTA: [Explore Options]
+* Why Invest with Us?
+    * Headline: "Your Success Is Our Priority"
+    * Features:
+        * Expert Team: Decades of real estate know-how.
+        * Transparency: Clear updates on your investment’s progress.
+        * Growth Potential: Riyadh’s market is your golden ticket.
+    * CTA: [Start Investing]
+* Investor Testimonial:
+    * Quote: "HabibiStay gave me peace of mind and rewards I never expected!" – Fatima, Riyadh Investor
+    * CTA: [Learn More]
+
+5. About Us
+* Hero Section:
+    * Headline: "Welcome to HabibiStay: Where Trust Meets Opportunity"
+    * Sub-Headline: "We’re passionate about creating exceptional stays and unlocking wealth for our community."
+    * Visual: Team photo with a warm, welcoming vibe.
+* Our Story:
+    * "Born in Riyadh, HabibiStay blends local expertise with a global vision. Our mission is to make property ownership and investment effortless, while giving guests unforgettable experiences. With a team of real estate and hospitality veterans, we’re here to build lasting partnerships you can rely on."
+* Our Values:
+    * Trust: Honest, open relationships with every client.
+    * Excellence: Top-quality service in every detail.
+    * Growth: Turning opportunities into success for all.
+    * CTA: [Meet Our Team]
+* Meet Our Founders:
+    * Mr. Abdullah Mirza, Co-Founder: "Abdullah is our tech visionary, blending over a decade of AI expertise with a deep love for real estate innovation. He’s the heartbeat of our cutting-edge platform, ensuring it’s as intuitive as it is powerful. When he’s not shaping the future of property management, you might find him exploring Riyadh’s hidden gems—always dreaming up ways to make HabibiStay even better for you."
+    * Vladimir Radchenko, Co-Founder: "Vladimir is our financial maestro, with a sharp eye for opportunity and a knack for turning investments into lasting wealth. His years of experience mean your returns are not just promising—they’re secure. A trusted guide for our investors, Vladimir’s calm confidence ensures HabibiStay is a safe harbor for your financial goals, no matter where you’re starting from."
+    * Anna Miroshenchinko, Co-Founder: "Anna is the creative soul of HabibiStay, weaving exceptional experiences into every stay, partnership, and investment. With her keen sense of hospitality and design, she transforms properties into welcoming havens and opportunities into successes. Anna’s mission? To make every moment with HabibiStay feel personal, memorable, and effortlessly delightful."
+
+6. Success Stories
+* Headline: "Real People, Real Results"
+* Stories:
+    * Ahmed, Property Owner: "HabibiStay turned my headaches into profits—best decision I made!"
+    * Fatima, Investor: "A secure, rewarding investment I trust completely."
+    * Carlos, Guest: "Every stay feels special with HabibiStay!"
+* Visuals: Photos of happy clients with their quotes.
+* CTA: [Share Your Story]
+
+7. Blog
+* Headline: "Stay Inspired with HabibiStay Insights"
+* Featured Posts:
+    * "Top 5 Reasons to Visit Riyadh This Year"
+    * "How to Make Your Property a Guest Favorite"
+    * "Why Riyadh Is the Next Big Investment Hub"
+* CTA: [Read More]
+
+8. Contact Us
+* Hero Section:
+    * Headline: "We’re Here for You—Let’s Connect"
+    * Sub-Headline: "Questions? Ideas? Reach out anytime."
+* Contact Details:
+    * Phone: +966-55-0800-669
+    * Email: info@habibistay.com
+    * Address: Riyadh, Saudi Arabia
+    * Live Chat: "Chat with us now!"
+* Form:
+    * Fields: Name, Email, Message
+    * Action: [Submit]
+    * CTA: [Send Message]
+
+9. Footer
+* Links: Home | Guests | Owners | Investors | About | Blog | Contact
+* Legal: Terms & Conditions | Privacy Policy | Cancellation Policy
+* Social Icons: LinkedIn, Instagram, Twitter
+* Tagline: "HabibiStay: Building Wealth, Creating Memories"
+
+Functional Requirements
+Update the website to include the following functionalities, organized into modular plugins for seamless integration with the existing codebase.
+1. Core Booking & Property Functions
+* Property Listings & Search:
+    * Display property details (images, descriptions, amenities, pricing, location, availability).
+    * Enable search and filtering by location, price range, dates, property type, etc.
+    * Include an interactive map view to visualize property locations.
+    * Highlight "Featured" listings and special promotions.
+* Booking Process:
+    * Implement a multi-step booking workflow:
+        * Real-time availability calendar.
+        * Collect guest details (name, contact, special requests).
+        * Process payments securely in SAR, supporting refunds and modifications.
+        * Issue instant booking confirmations via email/SMS.
+        * Allow booking modifications and cancellations.
+* Reviews & Ratings:
+    * Enable guests to leave reviews and star ratings.
+    * Allow hosts to respond to reviews.
+    * Display aggregate ratings on property pages.
+2. User Roles & Account Functions
+* Guest/Traveler:
+    * Registration/login with email and social options.
+    * Profile management (details, password, preferences).
+    * View booking history and manage reservations.
+    * Save favorite properties (wishlists).
+    * Submit reviews and ratings.
+* Host:
+    * Register as a property owner.
+    * Create and manage property listings (details, images, availability).
+    * Set pricing rules and booking policies.
+    * View earnings and financial reports.
+    * Communicate with guests via messaging.
+* Employee:
+    * Manage properties on behalf of hosts.
+    * Coordinate maintenance and guest communications.
+    * Access a dashboard for operational tasks.
+* Investor:
+    * Register as an investor.
+    * View portfolio details (ROI, occupancy rates, revenue trends).
+    * Download financial reports (PDF/CSV).
+    * Receive notifications about investment opportunities.
+* Admin:
+    * Oversee system and manage content.
+    * Approve/edit/delete user accounts, listings, and reviews.
+    * Configure site settings (payment, language, currency).
+    * Access analytics and financial reports.
+    * Use a drag-and-drop page builder for frontend edits.
+    * Monitor audit logs and security events.
+* AI Bot (Sara):
+    * Virtual sales assistant (no login required).
+    * Greet visitors and assist with accommodation needs.
+    * Recommend properties and upsell investment opportunities.
+    * Guide users through booking and log interactions.
+3. AI-Powered Chatbot Functions (Sara)
+* Conversational Interface:
+    * Initiate chats on homepage and booking pages.
+    * Understand inquiries in real-time, enabling users to view, select, book, and pay within the interface.
+    * Respond in Arabic and English based on user preference.
+    * Suggest properties and answer FAQs.
+* Sales & Upselling:
+    * Proactively suggest investment options and add-on services (e.g., tours, maintenance packages).
+* Configuration & Logging:
+    * Allow admins to configure prompts and log conversations for review.
+4. Advanced Admin Management & Content Editing
+* Drag-and-Drop Page Builder:
+    * Visual editor for creating/editing pages and templates with live preview.
+    * Support reusable templates.
+* Custom Content Management:
+    * Edit static pages (About Us, Contact, FAQ) and blog posts.
+    * Manage dynamic content (chatbot prompts, emails) with version control.
+* Dashboard & Reporting:
+    * Real-time monitoring (bookings, revenue, user growth).
+    * Custom financial reports (earnings, commissions, ROI) exportable to CSV/PDF.
+* Role & Permission Configuration:
+    * Define granular permissions and customizable access controls.
+    * Maintain audit logs for admin actions.
+5. Payment & Financial Functions
+* Payment Processing:
+    * Process bookings in SAR with refund and partial payment support.
+* Financial Reporting:
+    * Generate host revenue summaries.
+    * Provide investor dashboards (ROI, occupancy, trends).
+    * Schedule automated report delivery.
+6. Localization, Currency, & Translation Functions
+* Multi-Language Support:
+    * Dynamic translation for Arabic and English with a toggle.
+    * Support RTL layouts.
+* Currency Handling:
+    * Default to SAR with proper formatting.
+    * Prepare for future multi-currency support.
+7. Marketing, SEO, & Analytics Functions
+* SEO Optimization:
+    * Use clean URLs, meta-tags, and mobile-responsive design for fast load times.
+* Referral & Promotion Systems:
+    * Enable referral codes, discounts, and seasonal promotions.
+* Analytics & Tracking:
+    * Track user engagement and conversions with real-time dashboards.
+8. Third-Party Integrations & Automation
+* Social Media & Authentication:
+    * Support social logins (e.g., Facebook, Google).
+* Mapping & Location:
+    * Display property locations on an interactive map.
+* Email & Notifications:
+    * Send transactional emails (confirmations, reminders).
+
+Design Notes
+* Color Scheme: Brand blue (#2957c3) for headers, buttons, and accents; white background with soft gray highlights.
+* Typography: Clean, modern fonts suitable for English and Arabic (e.g., Arabic-friendly options).
+* Imagery: High-quality photos of properties, guests, and the team.
+* Responsiveness: Fully mobile-friendly with fast load times.
